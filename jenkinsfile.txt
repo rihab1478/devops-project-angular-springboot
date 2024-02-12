@@ -1,0 +1,102 @@
+pipeline {
+    agent any
+    tools{
+        maven 'M2_HOME'
+    }
+    stages{
+        stage("Cleanup Workspace"){
+            steps {
+                cleanWs()
+            }
+
+        }
+       
+         stage('Récupération du code') {
+            steps {
+                git(
+                    url: 'https://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@github.com/MohamedAliGatri/devops-project.git', branch: 'rihab'
+                )
+            }
+        }
+
+                stage("Maven Build"){
+            steps {
+                sh "mvn clean compile "
+            }
+
+        }
+
+stage("SonarQube") {
+    steps {
+       
+            sh "mvn sonar:sonar -Dsonar.login=admin -Dsonar.password=rihab"
+       
+    }
+}
+ 
+  stage("Mockito")
+  {
+     
+      steps {
+       
+            sh "mvn test"
+       
+    }
+  }
+ 
+ 
+  stage("nexus") {
+         steps {
+  sh 'mvn deploy -DskipTests'
+}}
+                   stage('Build docker image'){
+            steps{
+                script{
+                    sh 'docker build  -t rihab23/devops-project . '
+                }
+            }
+        }
+        stage('Push image to Hub'){
+            steps{
+                script{
+withCredentials([string(credentialsId: 'dockerpwd', variable: 'dockerpwd')]) {
+                   sh 'docker login -u rihab23 -p ${dockerpwd}'
+}
+                   sh 'docker push rihab23/devops-project'
+                }
+            }
+        }
+             
+stage('docker-compose up') {
+          steps {
+        sh 'docker-compose up -d'
+}
+}
+stage('Prometheus') {
+          steps {
+        sh 'docker start prom'
+}
+
+}
+
+stage('Grafana') {
+          steps {
+        sh 'docker start graf'
+}
+
+}
+
+}
+ post {
+            failure {
+                emailext body: '''${SCRIPT, template="groovy-html.template"}''',
+                        subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Failed",
+                        mimeType: 'text/html',to: "applicationtest40@gmail.com"
+                }
+             success {
+                   emailext body: '''${SCRIPT, template="groovy-html.template"}''',
+                        subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - Successful",
+                        mimeType: 'text/html',to: "applicationtest40@gmail.com"
+              }
+        }
+}
